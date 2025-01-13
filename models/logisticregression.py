@@ -1,12 +1,12 @@
 import numpy as np
 
 class LogisticRegression:
-    def __init__(self, n_inputs, learning_rate=0.01, n_iters=1000):
+    def __init__(self, n_inputs, learning_rate=0.01, n_iters=1000, lambd_reg=0.00):
         self.n_inputs = n_inputs
         self.lr = learning_rate
         self.n_iters = n_iters
-        self.weights = None
-        self.bias = None
+        self.parameters = {}
+        self.lambd_reg = lambd_reg
 
     @staticmethod
     def sigmoid(x):
@@ -14,29 +14,48 @@ class LogisticRegression:
         return 1 / (1 + np.exp(-x))
 
     def initialize_parameters(self):
-        '''Initialize weights and bias to zeros'''
-        self.weights = np.random.rand(1, self.n_inputs) * 0.01
-        self.bias = np.zeros((1, 1))
+        '''Initialize weights and bias randomly
+        with small random numbers to break symmetry and avoid zero gradients
+        '''
+        parameters = {}
+        parameters['W'] = np.random.randn(1, self.n_inputs) * np.sqrt(1 / self.n_inputs) # xavier initialization
+        parameters['b'] = np.zeros((1, 1))
+        self.parameters = parameters
 
-    def propagate(self, X, y):
-        '''Compute the cost and gradients z = w1*x1 + w2*x2 + wn*xn + b = w^T x + b'''
-
+    def forward_propagation(self, X):
         m = X.shape[1]
         # Forward pass, sigmoid activation to get the probability
         # (1, m) = (1, n) . (n, m)  + (1, 1) broadcasted
-        A = self.sigmoid(np.dot(self.weights, X) + self.bias)
-        
-        # Compute the cost -1/m * sum(y * log(A) + (1-y) * log(1-A)) - binary cross-entropy loss
-        # y has shape (1, m)
-        # A has shape (1, m)
-        cost = -1 / m * np.sum(y * np.log(A) + (1 - y) * np.log(1 - A))
+        Z = np.dot(self.parameters["W"], X) + self.parameters["b"]
+        A = self.sigmoid(Z)
+        return A
 
+    def compute_cost(self, A, y):
+        '''Compute the cost -1/m * sum(y * log(A) + (1-y) * log(1-A)) - binary cross-entropy loss'''
+        m = y.shape[1]
+        # L2 reg ||w||^2 = sum(w^2) = w1^2 + w2^2 + ... + wn^2 = w^T . w
+        # y has shape (1, m), A has shape (1, m)
+        cost = -1 / m * np.sum(y * np.log(A) + (1 - y) * np.log(1 - A)) + self.lambd_reg / (2 * m) * np.sum(np.square(self.parameters["W"]))
+        cost = np.squeeze(cost)
+        return cost
+
+
+    def backward_propagation(self, X, y, A):
+        grads = {}
+        m = y.shape[1]
         # Backward propagation, compute the gradients
-        #dw = 1/m \sum (A - y) * X
-        dw = 1 / m * np.dot(A - y, X.T)
-        db = 1 / m * np.sum(A - y)
+        # dw = 1/m \sum (A - y) * X
+        # db = 1/m \sum (A - y)
+        grads["dW"] = 1 / m * np.dot(A - y, X.T) + self.lambd_reg / m * self.parameters["W"]
+        grads["db"] = 1 / m * np.sum(A - y)
+        
+        return grads
 
-        return cost, dw, db
+    def update_parameters(self, dw, db):
+        '''Update the weights and bias'''
+        self.parameters["W"] -= self.lr * dw
+        self.parameters["b"] -= self.lr * db
+
     
     def fit(self, X, y):
         '''Fit according to the learning rate and number of iterations'''
@@ -45,22 +64,19 @@ class LogisticRegression:
         self.initialize_parameters()
 
         for i in range(self.n_iters):
-            cost, dw, db = self.propagate(X, y)
-
-            # Update the weights and bias
-            self.weights -= self.lr * dw
-            self.bias -= self.lr * db
+            A = self.forward_propagation(X)
+            cost = self.compute_cost(A, y)
+            grads = self.backward_propagation(X, y, A)
+            self.update_parameters(grads["dW"], grads["db"])
 
             # Print the cost every 100 iterations
             if i % 100 == 0:
                 costs.append(cost)
                 print(f'Cost after iteration {i}: {cost}')
 
-        return costs
+        return self.parameters
 
     def predict(self, X):
         '''Predict the class labels for the provided data'''
-        A = self.sigmoid(np.dot(self.weights, X) + self.bias)
+        A = self.forward_propagation(X)
         return A > 0.5
-
-    
