@@ -1,7 +1,5 @@
 import numpy as np
 
-import numpy as np
-
 class FNN1Layer:
     def __init__(self, input_dim , output_dim, nunits=2, learning_rate=0.01, n_iters=1000, lambd_reg=0.00, dropout=None):
         self.input_dim = input_dim
@@ -69,7 +67,6 @@ class FNN1Layer:
         #b1 is shape(nunits, 1)
         #W2 is shape (1, nunits)
 
-
         Z1 =  np.dot(W1, X) + b1 # (nunits,number of examples)
         A1 = np.tanh(Z1) #(nunits,number of examples)
 
@@ -83,6 +80,7 @@ class FNN1Layer:
         A2 = self.sigmoid(Z2)
 
         cache = {"Z1": Z1,
+            "D1": D1,
             "A1": A1,
             "Z2": Z2,
             "A2": A2}
@@ -126,22 +124,18 @@ class FNN1Layer:
         W2 = self.parameters["W2"]
         A1 = cache["A1"]
         A2 = cache["A2"]
-
+    
         dZ2 = A2 - Y
         dW2 = 1/m * np.dot(dZ2, A1.T)
         db2 = 1/m * np.sum(dZ2, axis=1, keepdims=True)
 
-
+        dA1 = np.dot(W2.T, dZ2)
         if self.dropout:
-            #TODO: rever
-            dA1 = np.dot(W2.T, dZ2)
+            D1 = cache["D1"]
             dA1 = np.multiply(dA1, D1)
             dA1 /= 1 - self.dropout
 
-
         dZ1 = np.dot(W2.T, dZ2) * (1-np.power(A1,2)) # with tanh
-
-
         dW1 = 1/m * np.dot(dZ1,X.T) + self.lambd_reg / m * W1 #derivative with regularization term
         db1 = 1/m * np.sum(dZ1, axis=1, keepdims=True)
 
@@ -201,7 +195,7 @@ class FNN1Layer:
 
 
 class FNNClassifier:
-    def __init__(self, input_dim, output_dim, layers_dims, activations, learning_rate=0.01, n_iters=1000, lamdb_reg=0.00, dropout=None):
+    def __init__(self, input_dim, output_dim, layers_dims, activations, learning_rate=0.01, n_iters=1000, lamdb_reg=0.00):
                 
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -211,7 +205,6 @@ class FNNClassifier:
         self.n_iters = n_iters
         self.parameters = {}
         self.lamdb_reg = lamdb_reg
-        self.dropout = dropout
 
         assert len(self.layers_dims)  == len(activations) + 2
 
