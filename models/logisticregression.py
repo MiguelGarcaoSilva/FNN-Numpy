@@ -1,10 +1,8 @@
 import numpy as np
 
 class LogisticRegression:
-    def __init__(self, n_inputs, learning_rate=0.01, n_iters=1000, lambd_reg=0.00):
+    def __init__(self, n_inputs, lambd_reg=0.00):
         self.n_inputs = n_inputs
-        self.lr = learning_rate
-        self.n_iters = n_iters
         self.parameters = {}
         self.lambd_reg = lambd_reg
 
@@ -51,23 +49,23 @@ class LogisticRegression:
         
         return grads
 
-    def update_parameters(self, dw, db):
+    def update_parameters(self, dw, db, lr):
         '''Update the weights and bias'''
-        self.parameters["W"] -= self.lr * dw
-        self.parameters["b"] -= self.lr * db
+        self.parameters["W"] -= lr * dw
+        self.parameters["b"] -= lr * db
 
     
-    def fit(self, X, y):
+    def fit(self, X, y, learning_rate=0.01, n_iters=1000):
         '''Fit according to the learning rate and number of iterations'''
         np.random.seed(0)
         costs = []
         self.initialize_parameters()
 
-        for i in range(self.n_iters):
+        for i in range(n_iters):
             A = self.forward_propagation(X)
             cost = self.compute_cost(A, y)
             grads = self.backward_propagation(X, y, A)
-            self.update_parameters(grads["dW"], grads["db"])
+            self.update_parameters(grads["dW"], grads["db"], learning_rate)
 
             # Print the cost every 100 iterations
             if i % 100 == 0:

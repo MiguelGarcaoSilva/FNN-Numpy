@@ -1,12 +1,10 @@
 import numpy as np
 
 class FNN1Layer:
-    def __init__(self, input_dim , output_dim, nunits=2, learning_rate=0.01, n_iters=1000, lambd_reg=0.00, dropout=None):
+    def __init__(self, input_dim , output_dim, nunits=2, lambd_reg=0.00, dropout=None):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.nunits = nunits
-        self.lr = learning_rate
-        self.n_iters = n_iters
         self.parameters = {}
         # regulatization prevents overfitting by penalizing large weights in the cost function
         self.lambd_reg = lambd_reg
@@ -79,11 +77,17 @@ class FNN1Layer:
         Z2 = np.dot(W2, A1) + b2 #(1,number of examples)
         A2 = self.sigmoid(Z2)
 
-        cache = {"Z1": Z1,
-            "D1": D1,
-            "A1": A1,
-            "Z2": Z2,
-            "A2": A2}
+        if self.dropout:
+            cache = {"Z1": Z1,
+                "D1": D1,
+                "A1": A1,
+                "Z2": Z2,
+                "A2": A2}
+        else:
+            cache = {"Z1": Z1,
+                "A1": A1,
+                "Z2": Z2,
+                "A2": A2}
         return A2, cache
 
     def compute_cost(self, A2, Y):
@@ -141,21 +145,21 @@ class FNN1Layer:
 
         return {"dW1": dW1, "db1": db1, "dW2": dW2, "db2": db2}
 
-    def update_parameters(self, grads):
+    def update_parameters(self, grads, lr):
 
         W1 = self.parameters["W1"]
         b1 = self.parameters["b1"]
         W2 = self.parameters["W2"]
         b2 = self.parameters["b2"]
 
-        W1 -= self.lr * grads["dW1"]
-        b1 -= self.lr * grads["db1"]
-        W2 -= self.lr * grads["dW2"]
-        b2 -= self.lr * grads["db2"]
+        W1 -= lr * grads["dW1"]
+        b1 -= lr * grads["db1"]
+        W2 -= lr * grads["dW2"]
+        b2 -= lr * grads["db2"]
 
         return {"W1": W1, "b1": b1, "W2": W2, "b2": b2}
 
-    def fit(self, X, Y):
+    def fit(self, X, Y, learning_rate=0.01, n_iters=1000, seed=None):
         '''Fit according to the learning rate and number of iterations'''
         np.random.seed(0)
         m = X.shape[1]
@@ -165,18 +169,17 @@ class FNN1Layer:
 
         self.initialize_parameters_he()
 
-        for i in range(self.n_iters):
+        for i in range(n_iters):
             A2, cache = self.forward_propagation(X)
             cost = self.compute_cost(A2, Y)
             grads = self.backward_propagation(cache, X, Y)
-            self.parameters = self.update_parameters(grads)
-
+            self.parameters = self.update_parameters(grads, learning_rate)
+            costs.append(cost)
             # Print the cost every 100 iterations
             if i % 100 == 0:
-                costs.append(cost)
                 print(f'Cost after iteration {i}: {cost}')
 
-        return self.parameters
+        return self.parameters, costs
 
     def predict(self, X):
         '''Predict the class labels for the provided data'''
@@ -195,14 +198,12 @@ class FNN1Layer:
 
 
 class FNNClassifier:
-    def __init__(self, input_dim, output_dim, layers_dims, activations, learning_rate=0.01, n_iters=1000, lamdb_reg=0.00):
+    def __init__(self, input_dim, output_dim, layers_dims, activations, lamdb_reg=0.00):
                 
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.layers_dims = [input_dim] + layers_dims + [output_dim]
         self.activations = activations
-        self.lr = learning_rate
-        self.n_iters = n_iters
         self.parameters = {}
         self.lamdb_reg = lamdb_reg
 
@@ -406,34 +407,84 @@ class FNNClassifier:
 
         return grads
 
-    def update_parameters(self, grads) -> None:
+    def update_parameters_gd(self, grads, lr) -> None:
         for l in range(1, len(self.layers_dims)):
-            self.parameters["W" + str(l)] = self.parameters["W" + str(l)] - self.lr * grads["dW" + str(l)]
-            self.parameters["b" + str(l)] = self.parameters["b" + str(l)] - self.lr * grads["db" + str(l)]
+            self.parameters["W" + str(l)] = self.parameters["W" + str(l)] - lr * grads["dW" + str(l)]
+            self.parameters["b" + str(l)] = self.parameters["b" + str(l)] - lr * grads["db" + str(l)]
+        return
+    
+    def update_parameters_momentum(self, grads, lr) -> None:
+        for l in range(1, len(self.layers_dims)):
+            self.parameters["W" + str(l)] = self.parameters["W" + str(l)] - lr * grads["dW" + str(l)]
+            self.parameters["b" + str(l)] = self.parameters["b" + str(l)] - lr * grads["db" + str(l)]
+        return
+    
+    def update_parameters_adam(self, grads, lr) -> None:
+        for l in range(1, len(self.layers_dims)):
+            self.parameters["W" + str(l)] = self.parameters["W" + str(l)] - lr * grads["dW" + str(l)]
+            self.parameters["b" + str(l)] = self.parameters["b" + str(l)] - lr * grads["db" + str(l)]
         return
 
-    def fit(self, X, Y, seed=None):
+    def fit(self, X, Y, optimizer, learning_rate, n_iters, seed=None):
         '''Fit according to the learning rate and number of iterations'''
         np.random.seed(seed)
         costs = []
 
         self.initialize_parameters()
 
-        for i in range(self.n_iters):
+        for i in range(n_iters):
 
             AL, caches = self.forward_propagation(X)
             cost = self.compute_cost(AL, Y)
             grads = self.backward_propagation(AL, Y, caches)
-            self.update_parameters(grads)
+            self.update_parameters(grads, optimizer, learning_rate)
+            costs.append(cost)
 
             # Print the cost every 100 iterations
             if i % 100 == 0:
+                print(f'Cost after iteration {i}: {cost}')
+
+        return self.parameters, costs
+
+    def fit_mini_batch(self, X, Y, optimizer, learning_rate, n_iters, batch_size, seed=None):
+        '''Fit according to the learning rate and number of iterations'''
+        np.random.seed(0)
+        costs = []
+
+        self.initialize_parameters()
+
+        for i in range(n_iters):
+
+            for j in range(0, X.shape[1], batch_size):
+                X_batch = X[:, j:j+batch_size]
+                Y_batch = Y[:, j:j+batch_size]
+
+                AL, caches = self.forward_propagation(X_batch)
+                cost = self.compute_cost(AL, Y_batch)
+                grads = self.backward_propagation(AL, Y_batch, caches)
+                self.update_parameters(grads)
                 costs.append(cost)
+
+            # Print the cost every 100 iterations
+            if i % 100 == 0:
                 print(f'Cost after iteration {i}: {cost}')
 
         return self.parameters
+
+    def update_parameters(self, grads, optimizer, learning_rate):
+        if optimizer == "gd":
+            self.update_parameters_gd(grads, learning_rate)
+        elif optimizer == "momentum":
+            self.update_parameters_momentum(grads, learning_rate)
+        elif optimizer == "adam":
+            self.update_parameters_adam(grads, learning_rate)
+        else:
+            raise ValueError("Invalid optimizer")
+
 
     def predict(self, X):
         '''Predict the class labels for the provided data'''
         AL, _ = self.forward_propagation(X)
         return (AL > 0.5)
+
+
