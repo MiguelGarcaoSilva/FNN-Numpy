@@ -1,17 +1,15 @@
 import numpy as np
 
 class LogisticRegression:
-    def __init__(self, n_features, lambd_reg=0.0):
+    def __init__(self, n_features):
         """
         Logistic Regression model initialization.
 
         Parameters:
         - n_features: Number of input features.
-        - lambd_reg: Regularization parameter (default: 0.0, no regularization).
         """
         self.n_features = n_features
-        self.lambd_reg = lambd_reg # Prevents overfitting by penalizing overly complex models (large weights)
-        self.W = np.random.randn(1, n_features) * 0.01 # small random weights to break symmetry (e.g, all weights update symmetrically, causing ineffective learning.)
+        self.W = np.random.randn(1, n_features) * 0.01 # small random weights to break symmetry (e.g, if all weights are the same and updated symmetrically, causes ineffective learning.)
         self.b = 0
 
     @staticmethod
@@ -35,7 +33,7 @@ class LogisticRegression:
 
     def compute_cost(self, A, Y):
         """
-        Compute binary cross-entropy cost with optional L2 regularization.
+        Compute binary cross-entropy cost.
 
         Parameters:
         - A: Predicted probabilities, shape (1, m_samples).
@@ -46,9 +44,7 @@ class LogisticRegression:
         """
         m = Y.shape[1]
         cross_entropy_loss = -(1/m) * np.sum(Y * np.log(A) + (1 - Y) * np.log(1 - A))
-        L2_regularization = (self.lambd_reg / (2 * m)) * np.sum(np.square(self.W))
-        cost = cross_entropy_loss + L2_regularization
-        return np.squeeze(cost)
+        return np.squeeze(cross_entropy_loss)
 
     def backward_propagation(self, X, Y, A):
         """
@@ -64,7 +60,7 @@ class LogisticRegression:
         """
         m = Y.shape[1]
         dZ = A - Y
-        dW = (1/m) * np.dot(dZ, X.T) + (self.lambd_reg / m) * self.W
+        dW = (1/m) * np.dot(dZ, X.T) 
         db = (1/m) * np.sum(dZ)
 
         gradients = {"dW": dW, "db": db}
