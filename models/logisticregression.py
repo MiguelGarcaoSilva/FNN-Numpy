@@ -1,80 +1,124 @@
 import numpy as np
 
 class LogisticRegression:
-    def __init__(self, n_inputs, lambd_reg=0.00):
-        self.n_inputs = n_inputs
-        self.parameters = {}
-        self.lambd_reg = lambd_reg
+    def __init__(self, n_features, lambd_reg=0.0):
+        """
+        Logistic Regression model initialization.
+
+        Parameters:
+        - n_features: Number of input features.
+        - lambd_reg: Regularization parameter (default: 0.0, no regularization).
+        """
+        self.n_features = n_features
+        self.lambd_reg = lambd_reg # Prevents overfitting by penalizing overly complex models (large weights)
+        self.W = np.random.randn(1, n_features) * 0.01 # small random weights to break symmetry (e.g, all weights update symmetrically, causing ineffective learning.)
+        self.b = 0
 
     @staticmethod
-    def sigmoid(x):
-        '''Sigmoid function that works with numpy arrays'''
-        return 1 / (1 + np.exp(-x))
-
-    def initialize_parameters(self):
-        '''Initialize weights and bias randomly
-        with small random numbers to break symmetry and avoid zero gradients
-        '''
-        parameters = {}
-        parameters['W'] = np.random.randn(1, self.n_inputs) * np.sqrt(1 / self.n_inputs) # xavier initialization
-        parameters['b'] = np.zeros((1, 1))
-        self.parameters = parameters
+    def sigmoid(z):
+        """Compute sigmoid activation."""
+        return 1 / (1 + np.exp(-z))
 
     def forward_propagation(self, X):
-        m = X.shape[1]
-        # Forward pass, sigmoid activation to get the probability
-        # (1, m) = (1, n) . (n, m)  + (1, 1) broadcasted
-        Z = np.dot(self.parameters["W"], X) + self.parameters["b"]
+        """
+        Forward propagation step.
+
+        Parameters:
+        - X: Input features, shape (n_features, m_samples).
+
+        Returns:
+        - A: Predicted probabilities, shape (1, m_samples).
+        """
+        Z = np.dot(self.W, X) + self.b
         A = self.sigmoid(Z)
         return A
 
-    def compute_cost(self, A, y):
-        '''Compute the cost -1/m * sum(y * log(A) + (1-y) * log(1-A)) - binary cross-entropy loss'''
-        m = y.shape[1]
-        # L2 reg ||w||^2 = sum(w^2) = w1^2 + w2^2 + ... + wn^2 = w^T . w
-        # y has shape (1, m), A has shape (1, m)
-        cost = -1 / m * np.sum(y * np.log(A) + (1 - y) * np.log(1 - A)) + self.lambd_reg / (2 * m) * np.sum(np.square(self.parameters["W"]))
-        cost = np.squeeze(cost)
-        return cost
+    def compute_cost(self, A, Y):
+        """
+        Compute binary cross-entropy cost with optional L2 regularization.
 
+        Parameters:
+        - A: Predicted probabilities, shape (1, m_samples).
+        - Y: True labels, shape (1, m_samples).
 
-    def backward_propagation(self, X, y, A):
-        grads = {}
-        m = y.shape[1]
-        # Backward propagation, compute the gradients
-        # dw = 1/m \sum (A - y) * X
-        # db = 1/m \sum (A - y)
-        grads["dW"] = 1 / m * np.dot(A - y, X.T) + self.lambd_reg / m * self.parameters["W"]
-        grads["db"] = 1 / m * np.sum(A - y)
-        
-        return grads
+        Returns:
+        - cost: Computed cost.
+        """
+        m = Y.shape[1]
+        cross_entropy_loss = -(1/m) * np.sum(Y * np.log(A) + (1 - Y) * np.log(1 - A))
+        L2_regularization = (self.lambd_reg / (2 * m)) * np.sum(np.square(self.W))
+        cost = cross_entropy_loss + L2_regularization
+        return np.squeeze(cost)
 
-    def update_parameters(self, dw, db, lr):
-        '''Update the weights and bias'''
-        self.parameters["W"] -= lr * dw
-        self.parameters["b"] -= lr * db
+    def backward_propagation(self, X, Y, A):
+        """
+        Backward propagation step to compute gradients.
 
-    
-    def fit(self, X, y, learning_rate=0.01, n_iters=1000):
-        '''Fit according to the learning rate and number of iterations'''
-        np.random.seed(0)
+        Parameters:
+        - X: Input features, shape (n_features, m_samples).
+        - Y: True labels, shape (1, m_samples).
+        - A: Predicted probabilities, shape (1, m_samples).
+
+        Returns:
+        - gradients: Dictionary containing gradients dW and db.
+        """
+        m = Y.shape[1]
+        dZ = A - Y
+        dW = (1/m) * np.dot(dZ, X.T) + (self.lambd_reg / m) * self.W
+        db = (1/m) * np.sum(dZ)
+
+        gradients = {"dW": dW, "db": db}
+        return gradients
+
+    def update_parameters(self, gradients, learning_rate):
+        """
+        Update parameters using gradient descent.
+
+        Parameters:
+        - gradients: Dictionary containing gradients dW and db.
+        - learning_rate: Learning rate for updates.
+        """
+        self.W -= learning_rate * gradients["dW"]
+        self.b -= learning_rate * gradients["db"]
+
+    def fit(self, X, Y, learning_rate=0.01, n_iters=1000, verbose=True):
+        """
+        Fit model parameters.
+
+        Parameters:
+        - X: Input features, shape (n_features, m_samples).
+        - Y: True labels, shape (1, m_samples).
+        - learning_rate: Step size for parameter updates.
+        - n_iters: Number of iterations for training.
+        - verbose: Print cost every 10 iterations if True.
+
+        Returns:
+        - costs: List of cost values per iteration.
+        """
         costs = []
-        self.initialize_parameters()
-
         for i in range(n_iters):
             A = self.forward_propagation(X)
-            cost = self.compute_cost(A, y)
-            grads = self.backward_propagation(X, y, A)
-            self.update_parameters(grads["dW"], grads["db"], learning_rate)
+            cost = self.compute_cost(A, Y)
+            gradients = self.backward_propagation(X, Y, A)
+            self.update_parameters(gradients, learning_rate)
+            costs.append(cost)
 
-            # Print the cost every 100 iterations
-            if i % 100 == 0:
-                costs.append(cost)
-                print(f'Cost after iteration {i}: {cost}')
+            if verbose and i % 10 == 0:
+                print(f"Cost after iteration {i}: {cost}")
 
-        return self.parameters
+        return costs
 
-    def predict(self, X):
-        '''Predict the class labels for the provided data'''
+    def predict(self, X, threshold=0.5):
+        """
+        Predict binary labels for given data.
+
+        Parameters:
+        - X: Input features, shape (n_features, m_samples).
+        - threshold: Probability threshold to classify labels.
+
+        Returns:
+        - predictions: Binary predictions, shape (1, m_samples).
+        """
         A = self.forward_propagation(X)
-        return A > 0.5
+        predictions = (A > threshold).astype(int)
+        return predictions
