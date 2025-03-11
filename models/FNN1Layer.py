@@ -1,6 +1,6 @@
 import numpy as np
 
-class FNN1Layer:
+class FNN1LayerBinaryClassifier:
     def __init__(self, input_dim, nunits=2, dropout=None):
         """
         Initialize neural network parameters.
@@ -57,21 +57,24 @@ class FNN1Layer:
             X (np.ndarray): Input data of shape (input_dim, m).
             
         Returns:
-            AL (np.ndarray): Output layer activation.
+            AL (np.ndarray): Output layer activation (1, m). 
             cache (dict): Dictionary containing intermediate values.
         """
         W1, b1, W2, b2 = (self.parameters['W1'], self.parameters['b1'],
                           self.parameters['W2'], self.parameters['b2'])
 
-        Z1 = np.dot(W1, X) + b1
-        A1 = np.tanh(Z1)
+        Z1 = np.dot(W1, X) + b1  #  (layer_size, m) = (layer_size, input_dim).(input_dim, m) + (layer_size, m) broadcasted
+        A1 = np.tanh(Z1) # (layer_size, m)
 
         if self.dropout:
             D1 = np.random.rand(A1.shape[0], A1.shape[1]) < 1 - self.dropout # dropout mask
             A1 = np.multiply(A1, D1)
-            A1 /= 1 - self.dropout # inverted dropout to keep the expected value of the activations the same
+            # We apply inverted dropout scaling to keep the expected value of activations
+            # consistent between training and testing. During testing, there's no dropout,
+            # so we scale up activations during training to compensate for neurons set to zero.
+            A1 /= 1 - self.dropout # inverted dropout
 
-        Z2 = np.dot(W2, A1) + b2
+        Z2 = np.dot(W2, A1) + b2 # (1, m) = (1, prev_layer_size).(prev_layer_size, m) + (1, m) broadcasted
         AL = self.sigmoid(Z2)
 
         cache = {'Z1': Z1, 'A1': A1, 'Z2': Z2, 'AL': AL}
@@ -109,21 +112,23 @@ class FNN1Layer:
         W2 = self.parameters['W2']
         A1, AL = cache['A1'], cache['AL']
 
-        dZ2 = AL - Y
-        dW2 = np.dot(dZ2, A1.T) / m
-        db2 = np.sum(dZ2, axis=1, keepdims=True) / m
+        dZ2 = AL - Y  
+        dW2 = np.dot(dZ2, A1.T) / m  
+        db2 = np.sum(dZ2, axis=1, keepdims=True) / m  
 
         dA1 = np.dot(W2.T, dZ2)
+
         if self.dropout:
-            D1 = cache['D1']
-            dA1 = np.multiply(dA1, D1) / (1 - self.dropout)
+            #we need the mask to know which neuron didnt contribute to output
+            #so they are not considered in backprop
+            D1 = cache['D1'] 
+            dA1 = np.multiply(dA1, D1) / (1 - self.dropout) #inverted dropout
 
         dZ1 = dA1 * (1 - np.square(A1)) # tanh derivative
         dW1 = np.dot(dZ1, X.T) / m
         db1 = np.sum(dZ1, axis=1, keepdims=True) / m
 
-        grads = {'dW1': dW1, 'db1': db1, 'dW2': dW2, 'db2': db2}
-        return grads
+        return {'dW1': dW1, 'db1': db1, 'dW2': dW2, 'db2': db2}
 
     def update_parameters(self, grads, learning_rate):
         """Update parameters using gradient descent."""
@@ -131,7 +136,19 @@ class FNN1Layer:
             self.parameters[param] -= learning_rate * grads[f'd{param}']
 
     def fit(self, X, Y, learning_rate=0.01, n_iters=1000, verbose=True):
-        """Train the neural network."""
+        """
+        Train model.
+
+        Parameters:
+        - X: Input features, shape (n_features, m).
+        - Y: True labels, shape (1, m).
+        - learning_rate: Step size for parameter updates.
+        - n_iters: Number of iterations for training.
+        - verbose: Print cost every 10 iterations.
+
+        Returns:
+        - costs: List of cost values per iteration.
+        """
         np.random.seed(0)
         self.initialize_parameters_he()
         costs = []
@@ -149,6 +166,13 @@ class FNN1Layer:
         return costs
 
     def predict(self, X):
-        """Predict output using trained model."""
+        """
+        Predict binary labels for given data.
+
+        Parameters:
+        - X: Input features, shape (n_inputs, m).
+        Returns:
+        - predictions: Binary predictions, shape (1, m).
+        """
         AL, _ = self.forward_propagation(X)
         return AL > 0.5

@@ -1,47 +1,61 @@
 
+import numpy as np
+
 class FNNClassifier:
-    def __init__(self, input_dim, layers_dims, activations, lamdb_reg=0.00):
+    def __init__(self, input_dim, output_dim, layers_dims, activations, lamdb_reg=0.00):
         '''
         Initialize the parameters of the feedforward neural network
 
         Arguments:
         input_dim -- size of the input layer
+        output_dim --  size of the ouput layer
         layers_dims -- list containing the size of each hidden layer
         activations -- list containing the activation functions for each hidden layer
         lamdb_reg -- regularization parameter
         '''
      
         self.input_dim = input_dim
-        self.output_dim = 1
+        self.output_dim = output_dim
         self.layers_dims = [input_dim] + layers_dims + [self.output_dim]
-        self.activations = activations + ["sigmoid"]
+
+        if output_dim == 1:
+            self.activations = activations + ["sigmoid"]
+        else:
+            self.activations = activations + ["softmax"]
+
         self.lamdb_reg = lamdb_reg  # avoid overfitting by penalizing large weights
 
-        assert len(self.layers_dims)  == len(self.activations)
+        assert len(self.layers_dims)  == len(self.activations) + 1
+        assert self.output_dim >= 1
 
         for activation in activations:
             assert activation in ["relu", "tanh"]
 
         self.parameters = {}
         for l in range(1, len(self.layers_dims)):
-            parameters['W' + str(l)] = np.random.randn(self.layers_dims[l], self.layers_dims[l-1]) * 0.01
-            parameters['b' + str(l)] = np.zeros((self.layers_dims[l], 1))
+            self.parameters['W' + str(l)] = np.random.randn(self.layers_dims[l], self.layers_dims[l-1]) * 0.01
+            self.parameters['b' + str(l)] = np.zeros((self.layers_dims[l], 1))
 
     @staticmethod
     def sigmoid(x):
-        '''Sigmoid activation function with cache'''
-        return 1 / (1 + np.exp(-x)), x
+        '''Sigmoid activation function'''
+        return 1 / (1 + np.exp(-x))
+    
+    @staticmethod
+    def softmax(x):
+        '''Softmax activation function with cache'''
+        exps = np.exp(x - np.max(x)) #subtracting max(x) to avoid numerical instability
+        return exps / np.sum(exps, axis=0)
 
     @staticmethod
     def relu(x):
-        '''Relu activation function with cache'''
-        return x * (x > 0), x
+        '''Relu activation function'''
+        return x * (x > 0)
 
     @staticmethod
     def tanh(x):
-        '''Tanh activation function with cache'''
-        return np.tanh(x), x
-
+        '''Tanh activation function'''
+        return np.tanh(x)
 
     @staticmethod
     def relu_backward(dA, Z):
@@ -71,14 +85,25 @@ class FNNClassifier:
         return Z, (A, W, b)
 
     def linear_activation_forward(self, A_prev, W, b, activation_func):
+        """
+        Arguments:
+        A_prev --
+        W --
+        b -- 
+        activation_func -- the activation function from current layer
+        
+        Returns:
+        A-- the output of the layer
+        cache -- the linear and activation layer   (A, W, b), Z
+        """
         Z, linear_cache = self.linear_forward(A_prev, W, b)
-        A, activation_cache = activation_func(Z)  
-        return A, (linear_cache, activation_cache)
+        A = activation_func(Z)  
+        return A, (linear_cache, Z)
 
     
-    def forward_propagation(self, X):
+    def forward(self, X):
         """
-        Implement forward propagation for the [LINEAR->ActivationFunc]*(L-1)->LINEAR->SIGMOID computation
+        Implement forward propagation for the [LINEAR->ActivationFunc]*(L-1)->LINEAR->SIGMOID/Softmax
         
         Arguments:
         X -- data, numpy array of shape (input size, m)
@@ -99,36 +124,63 @@ class FNNClassifier:
             if self.activations[l-1] == "relu":
                 A, cache = self.linear_activation_forward(A_prev, W, b, self.relu)
                 caches.append(cache)
-            elif self.activations[l-1] == "tanh":
+            else: #tanh
                 A, cache = self.linear_activation_forward(A_prev, W, b, self.tanh)
-                caches.append(cache)
-            else: #sigmoid
-                A, cache = self.linear_activation_forward(A_prev, W, b, self.sigmoid)
-                caches.append(cache)     
-
-        AL, cache = self.linear_activation_forward(A, self.parameters['W' + str(L-1)], self.parameters['b' + str(L-1)], self.sigmoid)
+                caches.append(cache) 
+        
+        AL, cache = self.linear_activation_forward(A, self.parameters['W' + str(L-1)], self.parameters['b' + str(L-1)], self.activations[-1])
         caches.append(cache)
 
         return AL, caches
 
-    def compute_cost(self, AL, Y):
+    @staticmethod
+    def compute_cost_binary_crossentropy(self, AL, Y):
+        """Compute binary cross-entropy cost.
+        
+        Parameters:
+            AL (np.ndarray): Output layer activation.
+            Y (np.ndarray): True labels of shape (1, m).
+        
+        Returns:
+            cost -- cross-entropy cost
+         """
+        m = Y.shape[1]
+        return -(1 / m) * np.sum(Y * np.log(AL) + (1 - Y) * np.log(1 - AL))
+    
+    @staticmethod
+    def categorical_crossentropy(self, AL, Y):
         """
-        Implement the cost function with frobenius norm regularization
+        Implement the cost function w
         ||W_l||^2 = sum(W_l^2) = W1^2 + W2^2 + ... + Wn^2 = W^T . W
 
         Arguments:
-        AL -- probability vector corresponding to your label predictions, shape (1, m)
-        Y -- true "label" vector (for example: containing 0 if non-cat, 1 if cat), shape (1, m)
+        AL -- probability vector corresponding to label predictions, shape (output_dim, m)
+        Y -- true "label" vector  shape (output_dim, m)
+
+        Returns:
+        cost -- cross-entropy cost
+        """
+        m = Y.shape[1]
+        return -1/m * np.sum(np.multiply(np.log(AL),Y) + np.multiply(np.log(1-AL),1-Y))
+    
+    def compute_cost(self, AL, Y):
+        """
+        Computes the cost function with regularization
+
+        Arguments:
+        AL -- probability vector corresponding to label predictions, shape (output_dim, m)
+        Y -- true "label" vector shape (output_dim, m)
 
         Returns:
         cost -- cross-entropy cost
         """
         m = Y.shape[1]
         AL = np.clip(AL, 1e-10, 1 - 1e-10) # to avoid log(0)
-        cost = -1/m * np.sum(np.multiply(np.log(AL),Y) + np.multiply(np.log(1-AL),1-Y))
+        cost = self.binary_crossentropy(AL, Y) if self.output_dim == 1 else self.categorical_crossentropy(AL, Y)
         # L2 regularization lambda/2m * sum(||W_l||^2)
         l2_regularization_cost = self.lamdb_reg/(2*m) * np.sum([np.sum(np.square(self.parameters['W' + str(l)])) for l in range(1, len(self.layers_dims))])
         return np.squeeze(cost) + l2_regularization_cost
+        
 
 
     def linear_backward(self, dZ, cache):
@@ -156,7 +208,7 @@ class FNNClassifier:
 
         return dA_prev, dW, db
 
-    def backward_propagation(self, AL, Y, caches):    
+    def backward(self, AL, Y, caches):    
         """
         Implement the backward propagation for the [LINEAR->RELU] * (L-1) -> LINEAR -> SIGMOID group
         
@@ -264,9 +316,9 @@ class FNNClassifier:
 
         for i in range(n_iters):
 
-            AL, caches = self.forward_propagation(X)
+            AL, caches = self.forward(X)
             cost = self.compute_cost(AL, Y)
-            grads = self.backward_propagation(AL, Y, caches)
+            grads = self.backward(AL, Y, caches)
             if optimizer == "gd":
                 self.update_parameters_gd(grads, learning_rate)
             elif optimizer == "momentum":
@@ -320,9 +372,9 @@ class FNNClassifier:
                 X_batch = X[:, j:j+batch_size]
                 Y_batch = Y[:, j:j+batch_size]
 
-                AL, caches = self.forward_propagation(X_batch)                
+                AL, caches = self.forward(X_batch)                
                 cost = self.compute_cost(AL, Y_batch)
-                grads = self.backward_propagation(AL, Y_batch, caches)
+                grads = self.backward(AL, Y_batch, caches)
                 if optimizer == "gd":
                     self.update_parameters_gd(grads, learning_rate)
                 elif optimizer == "momentum":
@@ -342,131 +394,12 @@ class FNNClassifier:
 
     def predict(self, X):
         '''Predict the class labels for the provided data'''
-        AL, _ = self.forward_propagation(X)
+        AL, _ = self.forward(X)
         return (AL > 0.5)
 
 
 
 class FNNMultiClassClassifier:
-    def __init__(self, input_dim, output_dim, layers_dims, activations, lamdb_reg=0.00):
-                
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.layers_dims = [input_dim] + layers_dims + [output_dim]
-        self.activations = activations
-        self.parameters = {}
-        self.lamdb_reg = lamdb_reg
-
-        assert len(self.layers_dims)  == len(activations) + 2
-
-
-    @staticmethod
-    def softmax(x):
-        '''Softmax activation function with cache'''
-        exps = np.exp(x - np.max(x)) #subtracting max(x) to avoid numerical instability
-        return exps / np.sum(exps, axis=0)
-
-    @staticmethod
-    def relu(x):
-        '''Relu activation function with cache'''
-        return x * (x > 0)
-
-
-    @staticmethod
-    def relu_backward(dA, Z):
-        '''Relu activation backward'''
-        return dA * (Z > 0)
-
-
-    def initialize_parameters(self):
-        '''Initialize weights and bias randomly
-        initializing to zero results in hidden units to be identical'''
-
-        parameters = {}
-
-        for l in range(1, len(self.layers_dims)):
-            parameters['W' + str(l)] = np.random.randn(self.layers_dims[l], self.layers_dims[l-1]) * 0.01
-            parameters['b' + str(l)] = np.zeros((self.layers_dims[l], 1))
-            
-        self.parameters = parameters
-
-
-    def linear_forward(self, A, W, b):
-        """
-        Implement the linear part of a layer's forward propagation.
-
-        Arguments:
-        A -- activations from previous layer (or X is first layer): (size of previous layer, m)
-        W -- weights matrix: numpy array of shape (size of current layer, size of previous layer)
-        b -- bias vector, numpy array of shape (size of the current layer, 1)
-
-        Returns:
-        Z -- the input of the activation function, also called pre-activation parameter 
-        cache -- "A", "W" and "b" ; stored for computing the backward pass efficiently
-        """
-        Z = np.dot(W, A) + b
-        cache = (A, W, b)
-        return Z, cache
-
-    def linear_activation_forward(self, A_prev, W, b, activation_func):
-        Z, linear_cache = self.linear_forward(A_prev, W, b)
-        A, activation_cache = activation_func(Z)  
-        return A, (linear_cache, activation_cache)
-
-    
-    def forward_propagation(self, X):
-        """
-        Implement forward propagation for the [LINEAR->ActivationFunc]*(L-1)->LINEAR->SIGMOID computation
-        
-        Arguments:
-        X -- data, numpy array of shape (input size, m)
-        
-        Returns:
-        AL -- activation value from the output (last) layer
-        caches -- list of caches containing:
-                    every cache of linear_activation_forward() (L indexed from 0 to L-1)
-        """ 
-        caches = []
-        A = X
-        L = len(self.layers_dims) 
-
-        for l in range(1, L-1):
-            A_prev = A
-            W = self.parameters['W' + str(l)]
-            b = self.parameters['b' + str(l)]
-            if self.activations[l-1] == "relu":
-                A, cache = self.linear_activation_forward(A_prev, W, b, self.relu)
-                caches.append(cache)
-            elif self.activations[l-1] == "tanh":
-                A, cache = self.linear_activation_forward(A_prev, W, b, self.tanh)
-                caches.append(cache)
-            else: #sigmoid
-                A, cache = self.linear_activation_forward(A_prev, W, b, self.sigmoid)
-                caches.append(cache)     
-
-        AL, cache = self.linear_activation_forward(A, self.parameters['W' + str(L-1)], self.parameters['b' + str(L-1)], self.sigmoid)
-        caches.append(cache)
-
-        return AL, caches
-
-    def compute_cost(self, AL, Y):
-        """
-        Implement the cost function with frobenius norm regularization
-        ||W_l||^2 = sum(W_l^2) = W1^2 + W2^2 + ... + Wn^2 = W^T . W
-
-        Arguments:
-        AL -- probability vector corresponding to your label predictions, shape (1, m)
-        Y -- true "label" vector (for example: containing 0 if non-cat, 1 if cat), shape (1, m)
-
-        Returns:
-        cost -- cross-entropy cost
-        """
-        m = Y.shape[1]
-        AL = np.clip(AL, 1e-10, 1 - 1e-10) # to avoid log(0)
-        cost = -1/m * np.sum(np.multiply(np.log(AL),Y) + np.multiply(np.log(1-AL),1-Y))
-        # L2 regularization lambda/2m * sum(||W_l||^2)
-        l2_regularization_cost = self.lamdb_reg/(2*m) * np.sum([np.sum(np.square(self.parameters['W' + str(l)])) for l in range(1, len(self.layers_dims))])
-        return np.squeeze(cost) + l2_regularization_cost
 
 
     def linear_backward(self, dZ, cache):
@@ -494,7 +427,7 @@ class FNNMultiClassClassifier:
 
         return dA_prev, dW, db
 
-    def backward_propagation(self, AL, Y, caches):    
+    def backward(self, AL, Y, caches):    
         """
         Implement the backward propagation for the [LINEAR->RELU] * (L-1) -> LINEAR -> SIGMOID group
         
@@ -581,9 +514,9 @@ class FNNMultiClassClassifier:
 
         for i in range(n_iters):
 
-            AL, caches = self.forward_propagation(X)
+            AL, caches = self.forward(X)
             cost = self.compute_cost(AL, Y)
-            grads = self.backward_propagation(AL, Y, caches)
+            grads = self.backward(AL, Y, caches)
             t += 1
             self.update_parameters_adam(grads, learning_rate, v, s, t)
             costs.append(cost)
@@ -625,20 +558,20 @@ class FNNMultiClassClassifier:
                 X_batch = X[:, j:j+batch_size]
                 Y_batch = Y[:, j:j+batch_size]
 
-                AL, caches = self.forward_propagation(X_batch)                
+                AL, caches = self.forward(X_batch)                
                 cost = self.compute_cost(AL, Y_batch)
-                grads = self.backward_propagation(AL, Y_batch, caches)
+                grads = self.backward(AL, Y_batch, caches)
                 t += 1
                 self.update_parameters_adam(grads, learning_rate, v, s, t)
 
             costs.append(cost)
             # Print the cost every 100 epoch
-            if vervose and i % 10 == 0:
+            if verbose and i % 10 == 0:
                 print(f'Cost after epoch {i}: {cost}')
 
         return costs
 
     def predict(self, X):
         '''Predict the class labels for the provided data'''
-        AL, _ = self.forward_propagation(X)
+        AL, _ = self.forward(X)
         return (AL > 0.5)

@@ -1,15 +1,15 @@
 import numpy as np
 
-class LogisticRegression:
-    def __init__(self, n_features):
+class LogisticRegressionBinaryClassifier:
+    def __init__(self, n_inputs):
         """
         Logistic Regression model initialization.
 
         Parameters:
-        - n_features: Number of input features.
+        - n_inputs: Number of input features.
         """
-        self.n_features = n_features
-        self.W = np.random.randn(1, n_features) * 0.01 # small random weights to break symmetry (e.g, if all weights are the same and updated symmetrically, causes ineffective learning.)
+        self.n_inputs = n_inputs
+        self.W = np.random.randn(1, n_inputs) * 0.01 # small random weights to break symmetry (e.g, if all weights are the same and updated symmetrically, causes ineffective learning.)
         self.b = 0
 
     @staticmethod
@@ -22,10 +22,10 @@ class LogisticRegression:
         Forward propagation step.
 
         Parameters:
-        - X: Input features, shape (n_features, m_samples).
+        - X: Input features, shape (n_inputs, m).
 
         Returns:
-        - A: Predicted probabilities, shape (1, m_samples).
+        - A: Predicted probabilities, shape (1, m).
         """
         Z = np.dot(self.W, X) + self.b
         A = self.sigmoid(Z)
@@ -36,8 +36,8 @@ class LogisticRegression:
         Compute binary cross-entropy cost.
 
         Parameters:
-        - A: Predicted probabilities, shape (1, m_samples).
-        - Y: True labels, shape (1, m_samples).
+        - A: Predicted probabilities, shape (1, m).
+        - Y: True labels, shape (1, m).
 
         Returns:
         - cost: Computed cost.
@@ -51,20 +51,19 @@ class LogisticRegression:
         Backward propagation step to compute gradients.
 
         Parameters:
-        - X: Input features, shape (n_features, m_samples).
-        - Y: True labels, shape (1, m_samples).
-        - A: Predicted probabilities, shape (1, m_samples).
+        - X: Input features, shape (n_inputs, m).
+        - Y: True labels, shape (1, m).
+        - A: Predicted probabilities, shape (1, m).
 
         Returns:
         - gradients: Dictionary containing gradients dW and db.
         """
         m = Y.shape[1]
-        dZ = A - Y
-        dW = (1/m) * np.dot(dZ, X.T) 
-        db = (1/m) * np.sum(dZ)
+        dZ = A - Y # Gradient of cost w.r.t linear output (cross-entropy + sigmoid/softmax simplification)
+        dW = (1/m) * np.dot(dZ, X.T)  # gradient w.r.t weights W
+        db = (1/m) * np.sum(dZ) # gradient w.r.t bias 
 
-        gradients = {"dW": dW, "db": db}
-        return gradients
+        return {"dW": dW, "db": db}
 
     def update_parameters(self, gradients, learning_rate):
         """
@@ -82,8 +81,8 @@ class LogisticRegression:
         Fit model parameters.
 
         Parameters:
-        - X: Input features, shape (n_features, m_samples).
-        - Y: True labels, shape (1, m_samples).
+        - X: Input features, shape (n_inputs, m).
+        - Y: True labels, shape (1, m).
         - learning_rate: Step size for parameter updates.
         - n_iters: Number of iterations for training.
         - verbose: Print cost every 10 iterations if True.
@@ -104,17 +103,15 @@ class LogisticRegression:
 
         return costs
 
-    def predict(self, X, threshold=0.5):
+    def predict(self, X):
         """
         Predict binary labels for given data.
 
         Parameters:
-        - X: Input features, shape (n_features, m_samples).
-        - threshold: Probability threshold to classify labels.
-
+        - X: Input features, shape (n_inputs, m).
+        
         Returns:
-        - predictions: Binary predictions, shape (1, m_samples).
+        - predictions: Binary predictions, shape (1, m).
         """
-        A = self.forward_propagation(X)
-        predictions = (A > threshold).astype(int)
-        return predictions
+        AL = self.forward_propagation(X)
+        return AL > 0.5
