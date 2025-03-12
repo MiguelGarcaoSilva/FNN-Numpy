@@ -50,7 +50,7 @@ class FNN1LayerBinaryClassifier:
         self.parameters['W2'] = np.random.randn(self.output_dim, self.nunits) * np.sqrt(2 / self.nunits)
         self.parameters['b2'] = np.zeros((self.output_dim, 1))
 
-    def forward_propagation(self, X):
+    def forward(self, X):
         """Perform forward propagation.
         
         Parameters:
@@ -97,7 +97,7 @@ class FNN1LayerBinaryClassifier:
         cost = -(1 / m) * np.sum(Y * np.log(AL) + (1 - Y) * np.log(1 - AL))
         return np.squeeze(cost)
 
-    def backward_propagation(self, cache, X, Y):
+    def backward(self, cache, X, Y):
         """Perform backward propagation.
         
         Parameters:
@@ -112,7 +112,7 @@ class FNN1LayerBinaryClassifier:
         W2 = self.parameters['W2']
         A1, AL = cache['A1'], cache['AL']
 
-        dZ2 = AL - Y  
+        dZ2 = AL - Y  # Derivative simplifiec of sigmoid activation + cross-entropy loss
         dW2 = np.dot(dZ2, A1.T) / m  
         db2 = np.sum(dZ2, axis=1, keepdims=True) / m  
 
@@ -154,9 +154,9 @@ class FNN1LayerBinaryClassifier:
         costs = []
 
         for i in range(n_iters):
-            AL, cache = self.forward_propagation(X)
+            AL, cache = self.forward(X)
             cost = self.compute_cost(AL, Y)
-            grads = self.backward_propagation(cache, X, Y)
+            grads = self.backward(cache, X, Y)
             self.update_parameters(grads, learning_rate)
 
             costs.append(cost)
@@ -174,5 +174,5 @@ class FNN1LayerBinaryClassifier:
         Returns:
         - predictions: Binary predictions, shape (1, m).
         """
-        AL, _ = self.forward_propagation(X)
+        AL, _ = self.forward(X)
         return AL > 0.5
